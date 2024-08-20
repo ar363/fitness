@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:localstore/localstore.dart';
+import 'package:hive/hive.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:relative_time/relative_time.dart';
+import 'package:uuid/uuid.dart';
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Hive.initFlutter();
+  await Hive.openBox("settings");
+  await Hive.openBox("workouts");
   runApp(const MyApp());
 }
-
-final db = Localstore.instance;
 
 enum WorkoutType {
   walking,
@@ -94,6 +97,11 @@ class MyHomePage extends StatefulWidget {
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
+var uuid = const Uuid();
+String generateRandomId() {
+  return uuid.v4();
+}
+
 class _MyHomePageState extends State<MyHomePage> {
   String _name = '';
   String _greeting = '';
@@ -117,24 +125,26 @@ class _MyHomePageState extends State<MyHomePage> {
     return 'Good evening';
   }
 
-  void _saveName() {
-    db.collection('users').doc('user').set({'name': _name});
+  void _saveName() async {
+    await Hive.box("settings").put('name', _name);
+
     setState(() {
       _nameNotSet = false;
     });
   }
 
   void _getName() async {
-    final doc = await db.collection('users').doc('user').get();
+    final name = Hive.box("settings").get("name");
 
     setState(() {
-      _name = doc?['name'] ?? '';
-      _nameNotSet = doc?['name'] is String ? false : true;
+      _name = name ?? '';
+      _nameNotSet = name is String ? false : true;
     });
   }
 
   void _getWorkouts() async {
-    final docs = await db.collection('workouts').get();
+    var docs = Hive.box("workouts").toMap();
+
     var sortedDocs = [];
 
     for (var docid in docs!.keys) {
@@ -142,7 +152,7 @@ class _MyHomePageState extends State<MyHomePage> {
         'id': docid,
         ...docs[docid],
         'typeinfo': workoutTypeData[WorkoutType.values.firstWhere((element) =>
-            element.toString() == 'WorkoutType.' + docs[docid]['type'])]
+            element.toString() == 'WorkoutType.${docs[docid]['type']}')]
       });
     }
 
@@ -177,7 +187,7 @@ class _MyHomePageState extends State<MyHomePage> {
         title: Text(widget.title),
       ),
       body: (_nameNotSet)
-          ? new Center(
+          ? Center(
               child: Container(
                   constraints: const BoxConstraints(maxWidth: 400),
                   child: Column(
@@ -201,8 +211,8 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                     ],
                   )))
-          : new Container(
-              padding: EdgeInsets.all(16),
+          : Container(
+              padding: const EdgeInsets.all(16),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.start,
                 children: <Widget>[
@@ -278,7 +288,7 @@ class AddWorkoutPage extends StatefulWidget {
 class _AddWorkoutPageState extends State<AddWorkoutPage> {
   WorkoutType _workoutType = WorkoutType.walking;
   double _distanceCovered = 0.0;
-  double _caloriesBurned = 0.0;
+  int _caloriesBurned = 0;
   int _yogaDuration = 0;
   int _workoutWeight = 0;
   int _workoutReps = 0;
@@ -288,29 +298,30 @@ class _AddWorkoutPageState extends State<AddWorkoutPage> {
   void _calculateCaloriesBurned() {
     if (_workoutType == WorkoutType.walking) {
       setState(() {
-        _caloriesBurned = _distanceCovered * 50;
+        _caloriesBurned = (_distanceCovered * 50).round();
       });
     } else if (_workoutType == WorkoutType.running) {
       setState(() {
-        _caloriesBurned = _distanceCovered * 100;
+        _caloriesBurned = (_distanceCovered * 100).round();
       });
     } else if (_workoutType == WorkoutType.cycling) {
       setState(() {
-        _caloriesBurned = _distanceCovered * 75;
+        _caloriesBurned = (_distanceCovered * 75).round();
       });
     } else if (_workoutType == WorkoutType.swimming) {
       setState(() {
-        _caloriesBurned = _distanceCovered * 120;
+        _caloriesBurned = (_distanceCovered * 120).round();
       });
     } else if (_workoutType == WorkoutType.yoga) {
       setState(() {
-        _caloriesBurned = _yogaDuration * 5;
+        _caloriesBurned = (_yogaDuration * 5).round();
       });
     } else if (_workoutType == WorkoutType.benchPress ||
         _workoutType == WorkoutType.deadlift ||
         _workoutType == WorkoutType.pullUpOrPushUp) {
       setState(() {
-        _caloriesBurned = _workoutWeight * _workoutReps * _workoutSets * 0.5;
+        _caloriesBurned =
+            (_workoutWeight * _workoutReps * _workoutSets * 0.5).round();
       });
     }
   }
@@ -322,7 +333,7 @@ class _AddWorkoutPageState extends State<AddWorkoutPage> {
       id = _currentWorkoutId!;
       dt = widget.workout!['datetime'];
     } else {
-      id = db.collection('todos').doc().id;
+      id = generateRandomId();
       dt = DateTime.now().toIso8601String();
     }
 
@@ -330,32 +341,40 @@ class _AddWorkoutPageState extends State<AddWorkoutPage> {
         _workoutType == WorkoutType.running ||
         _workoutType == WorkoutType.cycling ||
         _workoutType == WorkoutType.swimming) {
-      await db.collection('workouts').doc(id).set({
+      await Hive.box("workouts").put(id, {
         'datetime': dt,
         'type': _workoutType.name,
         'distanceCovered': _distanceCovered,
         'caloriesBurned': _caloriesBurned,
-      }, SetOptions(merge: false));
+      });
     } else if (_workoutType == WorkoutType.yoga) {
-      await db.collection('workouts').doc(id).set({
+      await Hive.box("workouts").put(id, {
         'datetime': dt,
         'type': _workoutType.name,
         'duration': _yogaDuration,
         'caloriesBurned': _caloriesBurned,
-      }, SetOptions(merge: false));
-      print(_yogaDuration);
+      });
     } else if (_workoutType == WorkoutType.benchPress ||
         _workoutType == WorkoutType.deadlift ||
         _workoutType == WorkoutType.pullUpOrPushUp) {
-      await db.collection('workouts').doc(id).set({
+      await Hive.box("workouts").put(id, {
         'datetime': dt,
         'type': _workoutType.name,
         'weight': _workoutWeight,
         'reps': _workoutReps,
         'sets': _workoutSets,
         'caloriesBurned': _caloriesBurned,
-      }, SetOptions(merge: false));
+      });
     }
+
+    if (!mounted) {
+      return;
+    }
+    Navigator.pop(context, true);
+  }
+
+  Future<void> dropCurrentWorkout() async {
+    await Hive.box("workouts").delete(_currentWorkoutId);
 
     if (!mounted) {
       return;
@@ -457,7 +476,9 @@ class _AddWorkoutPageState extends State<AddWorkoutPage> {
                       const Text('Enter distance covered:'),
                       const SizedBox(height: 10),
                       TextFormField(
-                        initialValue: _distanceCovered.toString(),
+                        initialValue: _distanceCovered == 0
+                            ? ""
+                            : _distanceCovered.toString(),
                         onChanged: (value) => {
                           setState(() {
                             _distanceCovered =
@@ -490,7 +511,8 @@ class _AddWorkoutPageState extends State<AddWorkoutPage> {
                       const Text('Enter duration (mins):'),
                       const SizedBox(height: 10),
                       TextFormField(
-                        initialValue: _yogaDuration.toString(),
+                        initialValue:
+                            _yogaDuration == 0 ? "" : _yogaDuration.toString(),
                         onChanged: (value) => {
                           setState(() {
                             _yogaDuration =
@@ -525,7 +547,9 @@ class _AddWorkoutPageState extends State<AddWorkoutPage> {
                       const Text('Enter weight:'),
                       const SizedBox(height: 10),
                       TextFormField(
-                        initialValue: _workoutWeight.toString(),
+                        initialValue: _workoutWeight == 0
+                            ? ""
+                            : _workoutWeight.toString(),
                         onChanged: (value) => {
                           setState(() {
                             _workoutWeight =
@@ -553,7 +577,8 @@ class _AddWorkoutPageState extends State<AddWorkoutPage> {
                       const Text('Enter number of reps:'),
                       const SizedBox(height: 10),
                       TextFormField(
-                        initialValue: _workoutReps.toString(),
+                        initialValue:
+                            _workoutReps == 0 ? "" : _workoutReps.toString(),
                         onChanged: (value) => {
                           setState(() {
                             _workoutReps =
@@ -581,7 +606,8 @@ class _AddWorkoutPageState extends State<AddWorkoutPage> {
                       const Text('Enter number of sets per rep:'),
                       const SizedBox(height: 10),
                       TextFormField(
-                        initialValue: _workoutSets.toString(),
+                        initialValue:
+                            _workoutSets == 0 ? "" : _workoutSets.toString(),
                         onChanged: (value) => {
                           setState(() {
                             _workoutSets =
@@ -619,12 +645,28 @@ class _AddWorkoutPageState extends State<AddWorkoutPage> {
                     height: 40,
                     child: FilledButton(
                       onPressed: () async => addWorkout(),
-                      child:
-                          Text(widget.isEdit ? 'Save changes' : 'Add workout'),
                       style: FilledButton.styleFrom(
                           shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(10))),
-                    ))
+                      child:
+                          Text(widget.isEdit ? 'Save changes' : 'Add workout'),
+                    )),
+                const SizedBox(height: 16),
+                if (widget.isEdit)
+                  SizedBox(
+                      width: double.infinity,
+                      height: 40,
+                      child: FilledButton(
+                        onPressed: () async => dropCurrentWorkout(),
+                        style: FilledButton.styleFrom(
+                            backgroundColor:
+                                Theme.of(context).colorScheme.error,
+                            foregroundColor:
+                                Theme.of(context).colorScheme.onError,
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(10))),
+                        child: const Text('Delete workout'),
+                      )),
               ],
             ),
           )),

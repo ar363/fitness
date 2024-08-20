@@ -37,6 +37,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   localstore: ^1.4.0
   relative_time: ^5.0.0
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  uuid: ^4.4.2
 
 dev_dependencies:
   flutter_test:
