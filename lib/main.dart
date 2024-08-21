@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:hive/hive.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:relative_time/relative_time.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:uuid/uuid.dart';
 
 Future<void> main() async {
@@ -73,7 +74,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.teal),
         useMaterial3: true,
       ),
       routes: {
@@ -82,6 +83,7 @@ class MyApp extends StatelessWidget {
             const AddWorkoutPage(title: 'Add Workout', isEdit: false),
         '/editWorkout': (context) =>
             const AddWorkoutPage(title: 'View/Edit Workout', isEdit: true),
+        '/stats': (context) => const StatsPage(title: 'Stats'),
       },
       initialRoute: '/',
     );
@@ -102,11 +104,26 @@ String generateRandomId() {
   return uuid.v4();
 }
 
+Map<String, int> getWorkoutGoals() {
+  const calorieGoals = 2500;
+  const countGoals = 5;
+
+  return {
+    'calories': calorieGoals,
+    'count': countGoals,
+  };
+}
+
 class _MyHomePageState extends State<MyHomePage> {
   String _name = '';
   String _greeting = '';
   bool _nameNotSet = true;
   List _workouts = [];
+  final Map<String, int> _goals = getWorkoutGoals();
+  Map _todaysProgress = {
+    'calories': 0,
+    'count': 0,
+  };
 
   void _setName(String name) {
     setState(() {
@@ -138,7 +155,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     setState(() {
       _name = name ?? '';
-      _nameNotSet = name is String ? false : true;
+      _nameNotSet = (name is String && name.isNotEmpty) ? false : true;
     });
   }
 
@@ -161,6 +178,33 @@ class _MyHomePageState extends State<MyHomePage> {
 
     setState(() {
       _workouts = sortedDocs;
+    });
+
+    _calculateTodaysProgress();
+  }
+
+  void _calculateTodaysProgress() {
+    var todaysWorkouts = _workouts.where((workout) {
+      final workoutDate = DateTime.parse(workout['datetime']);
+      final now = DateTime.now();
+      return workoutDate.year == now.year &&
+          workoutDate.month == now.month &&
+          workoutDate.day == now.day;
+    });
+
+    var caloriesBurned = 0;
+    var count = 0;
+
+    for (var workout in todaysWorkouts) {
+      caloriesBurned += workout['caloriesBurned'] as int;
+      count += 1;
+    }
+
+    setState(() {
+      _todaysProgress = {
+        'calories': caloriesBurned,
+        'count': count,
+      };
     });
   }
 
@@ -204,15 +248,24 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             ListTile(
               title: const Text('Home'),
+              leading: const Icon(Icons.home),
               onTap: () {
                 Navigator.pop(context);
               },
             ),
             ListTile(
               title: const Text('Add workout'),
+              leading: const Icon(Icons.add),
               onTap: () {
                 Navigator.pushNamed(context, '/addWorkout')
                     .then((_) => {_getWorkouts()});
+              },
+            ),
+            ListTile(
+              title: const Text('Stats'),
+              leading: const Icon(Icons.bar_chart),
+              onTap: () {
+                Navigator.pushNamed(context, '/stats');
               },
             ),
           ],
@@ -247,12 +300,57 @@ class _MyHomePageState extends State<MyHomePage> {
               padding: const EdgeInsets.all(16),
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    '$_greeting, $_name',
-                    style: Theme.of(context).textTheme.headlineMedium,
+                    '$_greeting, $_name!',
+                    style: TextStyle(
+                      fontWeight: FontWeight.w400,
+                      fontSize: 14,
+                    ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 10),
+                  Text.rich(
+                    TextSpan(
+                      text: '${_todaysProgress['calories']}',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                      children: [
+                        TextSpan(
+                          text:
+                              '   / ${_goals['calories']} calories burnt today',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                  LinearProgressIndicator(
+                    value: _todaysProgress['calories'] > _goals['calories']
+                        ? 1
+                        : _todaysProgress['calories'] / _goals['calories']!,
+                    minHeight: 20,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  const SizedBox(height: 30),
+                  Text.rich(
+                    TextSpan(
+                      text: '${_todaysProgress['count']}',
+                      style: Theme.of(context).textTheme.headlineMedium,
+                      children: [
+                        TextSpan(
+                          text: '   / ${_goals['count']} workouts done today',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
+                    ),
+                  ),
+                  LinearProgressIndicator(
+                    value: _todaysProgress['count'] > _goals['count']
+                        ? 1
+                        : _todaysProgress['count'] / _goals['count']!,
+                    minHeight: 20,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  const SizedBox(height: 30),
                   const Text(
                     'Past workouts:',
                   ),
@@ -470,6 +568,7 @@ class _AddWorkoutPageState extends State<AddWorkoutPage> {
             ),
             ListTile(
               title: const Text('Home'),
+              leading: const Icon(Icons.home),
               onTap: () {
                 Navigator.pop(context);
                 Navigator.pop(context);
@@ -477,8 +576,16 @@ class _AddWorkoutPageState extends State<AddWorkoutPage> {
             ),
             ListTile(
               title: const Text('Add workout'),
+              leading: const Icon(Icons.add),
               onTap: () {
                 Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: const Text('Stats'),
+              leading: const Icon(Icons.bar_chart),
+              onTap: () {
+                Navigator.pushNamed(context, '/stats');
               },
             ),
           ],
@@ -734,6 +841,287 @@ class _AddWorkoutPageState extends State<AddWorkoutPage> {
               ],
             ),
           )),
+    );
+  }
+}
+
+class StatsPage extends StatefulWidget {
+  const StatsPage({super.key, required this.title});
+
+  final String title;
+
+  @override
+  State<StatsPage> createState() => _StatsPageState();
+}
+
+String camelToSentence(String text) {
+  var result = text.replaceAll(RegExp(r'(?<!^)(?=[A-Z])'), r" ");
+  var finalResult = result[0].toUpperCase() + result.substring(1);
+  return finalResult;
+}
+
+class _StatsPageState extends State<StatsPage> {
+  List _workouts = [];
+
+  void _getWorkouts() {
+    var docs = Hive.box("workouts").toMap();
+
+    var filteredDocs = [];
+
+    for (var docid in docs!.keys) {
+      var dt = DateTime.parse(docs[docid]['datetime']);
+      var now = DateTime.now();
+
+      if (now.difference(dt).inDays <= 7) {
+        filteredDocs.add({
+          'id': docid,
+          ...docs[docid],
+          'typeinfo': workoutTypeData[WorkoutType.values.firstWhere((element) =>
+              element.toString() == 'WorkoutType.${docs[docid]['type']}')]
+        });
+      }
+    }
+
+    setState(() {
+      _workouts = filteredDocs;
+    });
+  }
+
+  List<PieChartSectionData> caloriesSections() {
+    List<String> typenames = WorkoutType.values.map((x) => x.name).toList();
+    List<int> calories = List.filled(typenames.length, 0);
+
+    for (var workout in _workouts) {
+      var index = typenames.indexOf(workout['type']);
+      calories[index] += workout['caloriesBurned'] as int;
+    }
+
+    List<PieChartSectionData> sections = [];
+
+    for (var i = 0; i < typenames.length; i++) {
+      Color color = Colors.white;
+      switch (i) {
+        case 0:
+          color = Colors.teal;
+          break;
+        case 1:
+          color = Colors.purple;
+          break;
+        case 2:
+          color = Colors.blue;
+          break;
+        case 3:
+          color = Colors.yellow;
+          break;
+        case 4:
+          color = Colors.green;
+          break;
+        case 5:
+          color = Colors.orange;
+          break;
+        case 6:
+          color = Colors.pink;
+          break;
+        case 7:
+          color = Colors.red;
+          break;
+        case 8:
+          color = Colors.indigo;
+          break;
+      }
+      String realTypeName = "";
+
+      if (typenames[i] == "pullUpOrPushUp") {
+        realTypeName = "Pull-ups / Push-ups";
+      } else {
+        realTypeName = camelToSentence(typenames[i]);
+      }
+
+      var data = PieChartSectionData(
+        color: color,
+        value: calories[i].toDouble(),
+        title: '$realTypeName\n${calories[i].toString()}',
+        radius: 120,
+        titleStyle: const TextStyle(
+            fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+      );
+      sections.add(data);
+    }
+
+    return sections;
+  }
+
+  List<PieChartSectionData> countSections() {
+    List<String> typenames = WorkoutType.values.map((x) => x.name).toList();
+    List<int> count = List.filled(typenames.length, 0);
+
+    for (var workout in _workouts) {
+      var index = typenames.indexOf(workout['type']);
+      count[index] += 1;
+    }
+
+    List<PieChartSectionData> sections = [];
+
+    for (var i = 0; i < typenames.length; i++) {
+      Color color = Colors.white;
+      switch (i) {
+        case 8:
+          color = Colors.pink;
+          break;
+        case 7:
+          color = Colors.purple;
+          break;
+        case 6:
+          color = Colors.blue;
+          break;
+        case 5:
+          color = Colors.indigo;
+          break;
+        case 4:
+          color = Colors.green;
+          break;
+        case 3:
+          color = Colors.yellow;
+          break;
+        case 2:
+          color = Colors.red;
+          break;
+        case 1:
+          color = Colors.deepOrange;
+          break;
+        case 0:
+          color = Colors.deepPurple;
+          break;
+      }
+      String realTypeName = "";
+
+      if (typenames[i] == "pullUpOrPushUp") {
+        realTypeName = "Pull-ups / Push-ups";
+      } else {
+        realTypeName = camelToSentence(typenames[i]);
+      }
+
+      var data = PieChartSectionData(
+        color: color,
+        value: count[i].toDouble(),
+        title: '$realTypeName\n${count[i].toString()}',
+        radius: 120,
+        titleStyle: const TextStyle(
+            fontSize: 12, fontWeight: FontWeight.bold, color: Colors.white),
+      );
+      sections.add(data);
+    }
+
+    return sections;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+
+    _getWorkouts();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.title),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
+      ),
+      drawer: Drawer(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            DrawerHeader(
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              child: Text(
+                'Fitness Tracker',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onPrimary,
+                  fontSize: 24,
+                ),
+              ),
+            ),
+            ListTile(
+              title: const Text('Home'),
+              leading: const Icon(Icons.home),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pop(context);
+              },
+            ),
+            ListTile(
+              title: const Text('Add workout'),
+              leading: const Icon(Icons.add),
+              onTap: () {
+                Navigator.pushNamed(context, '/addWorkout');
+              },
+            ),
+            ListTile(
+              title: const Text('Stats'),
+              leading: const Icon(Icons.bar_chart),
+              onTap: () {
+                Navigator.pop(context);
+              },
+            ),
+          ],
+        ),
+      ),
+      body: Container(
+        padding: const EdgeInsets.all(16),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: <Widget>[
+              const SizedBox(height: 10),
+              const Text("Calories burnt this week",
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 400,
+                child: AspectRatio(
+                  aspectRatio: 1.5,
+                  child: PieChart(
+                    PieChartData(
+                      borderData: FlBorderData(
+                        show: false,
+                      ),
+                      sectionsSpace: 0,
+                      centerSpaceRadius: 80,
+                      sections: caloriesSections(),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 25),
+              const Text("Workouts done this week",
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 400,
+                child: AspectRatio(
+                  aspectRatio: 1.5,
+                  child: PieChart(
+                    PieChartData(
+                      borderData: FlBorderData(
+                        show: false,
+                      ),
+                      sectionsSpace: 0,
+                      centerSpaceRadius: 80,
+                      sections: countSections(),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
