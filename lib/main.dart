@@ -164,7 +164,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
     var sortedDocs = [];
 
-    for (var docid in docs!.keys) {
+    for (var docid in docs.keys) {
       sortedDocs.add({
         'id': docid,
         ...docs[docid],
@@ -304,7 +304,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 children: <Widget>[
                   Text(
                     '$_greeting, $_name!',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontWeight: FontWeight.w400,
                       fontSize: 14,
                     ),
@@ -868,7 +868,7 @@ class _StatsPageState extends State<StatsPage> {
 
     var filteredDocs = [];
 
-    for (var docid in docs!.keys) {
+    for (var docid in docs.keys) {
       var dt = DateTime.parse(docs[docid]['datetime']);
       var now = DateTime.now();
 
