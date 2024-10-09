@@ -1,16 +1,12 @@
-# fitness
+# Fitness Tracker Flutter App
 
-A new Flutter project.
+Developed as the 1st year skill lab project on "Mobile App Development using Flutter"
 
-## Getting Started
+Uses Hive for local data storage, FL Chart, material UI, flutter state management, dynamic forms, relative time
 
-This project is a starting point for a Flutter application.
-
-A few resources to get you started if this is your first Flutter project:
-
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Screenshots
+![](./screenshots/1.png)
+![](./screenshots/2.png)
+![](./screenshots/3.png)
+![](./screenshots/4.png)
+![](./screenshots/5.png)
